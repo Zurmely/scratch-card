@@ -1,9 +1,7 @@
 (() => {
   const foil = document.getElementById("foil");
-  const hint = document.getElementById("hint");
   const foilHint = document.getElementById("foilHint");
   const card = document.getElementById("card");
-  const revealBtn = document.getElementById("revealBtn");
   const sparklesCanvas = document.getElementById("sparkles");
   const confettiCanvas = document.getElementById("confetti");
 
@@ -181,8 +179,6 @@
     revealed = true;
     foilHint.classList.add("is-hidden");
     card.classList.add("is-revealed");
-    hint.textContent = "Feliz Aniversário ✨";
-    revealBtn.hidden = true;
     resetTilt();
 
     const fade = () => {
@@ -310,7 +306,6 @@
   foil.addEventListener("touchstart", start, { passive: false });
   window.addEventListener("touchmove", move, { passive: false });
   window.addEventListener("touchend", end, { passive: false });
-  revealBtn.addEventListener("click", reveal);
   window.addEventListener("resize", onResize);
 
   onResize();
