@@ -178,8 +178,7 @@ body {
   color: var(--ink);
 }
 
-.prize-kicker,
-.prize-note {
+.prize-kicker {
   margin: 0;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -188,7 +187,7 @@ body {
 }
 
 .prize-title {
-  margin: 16px 0 14px;
+  margin: 14px 0 8px;
   font-family: Fraunces, Georgia, serif;
   font-style: italic;
   font-weight: 700;
@@ -199,6 +198,23 @@ body {
   background-clip: text;
   color: transparent;
   filter: drop-shadow(0 8px 16px rgba(122, 24, 56, 0.16));
+}
+
+.prize-love {
+  margin: 0 0 16px;
+  font-family: Fraunces, Georgia, serif;
+  font-style: italic;
+  font-weight: 560;
+  font-size: clamp(1.35rem, 6vw, 1.7rem);
+  color: #9a2a4a;
+}
+
+.prize-note {
+  margin: 0;
+  max-width: 16rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: #8a3a4e;
 }
 
 .prize-mark {
