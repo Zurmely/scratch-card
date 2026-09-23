@@ -10,23 +10,27 @@
   const confettiCtx = confettiCanvas.getContext("2d");
 
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const brush = { min: 28, max: 46 };
-  const revealAt = 0.46;
+  const revealAt = 0.42;
+  const brush = 36;
 
   let dpr = 1;
   let drawing = false;
   let revealed = false;
+  let hasScratched = false;
   let last = null;
   let confetti = [];
   let sparkles = [];
   let progressQueued = false;
+  let layoutTries = 0;
+  let lastFoilW = 0;
+  let lastFoilH = 0;
 
   function sizeCanvas(canvas, context, cssWidth, cssHeight) {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.style.width = `${cssWidth}px`;
+    canvas.style.height = `${cssHeight}px`;
     canvas.width = Math.max(1, Math.round(cssWidth * dpr));
     canvas.height = Math.max(1, Math.round(cssHeight * dpr));
-    canvas.style.width = "";
-    canvas.style.height = "";
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
@@ -86,18 +90,29 @@
       ctx.fill();
     }
 
-    ctx.save();
     ctx.strokeStyle = "rgba(90, 42, 12, 0.18)";
     ctx.lineWidth = 2;
-    ctx.strokeRect(14, 14, w - 28, h - 28);
-    ctx.restore();
+    ctx.strokeRect(14, 14, Math.max(0, w - 28), Math.max(0, h - 28));
   }
 
   function setupFoil() {
-    if (revealed) return;
-    const rect = foil.getBoundingClientRect();
-    sizeCanvas(foil, foilCtx, rect.width, rect.height);
+    if (revealed || hasScratched) return;
+    const cardRect = card.getBoundingClientRect();
+    const cssW = cardRect.width - 20;
+    const cssH = cardRect.height - 20;
+    if ((cssW < 8 || cssH < 8) && layoutTries < 60) {
+      layoutTries += 1;
+      requestAnimationFrame(setupFoil);
+      return;
+    }
+    if (Math.abs(cssW - lastFoilW) < 1 && Math.abs(cssH - lastFoilH) < 1 && foil.width > 1) {
+      return;
+    }
+    lastFoilW = cssW;
+    lastFoilH = cssH;
+    sizeCanvas(foil, foilCtx, cssW, cssH);
     paintFoil();
+    foil.style.background = "transparent";
   }
 
   function setupFullbleed(canvas, context) {
@@ -106,31 +121,30 @@
 
   function pointerPos(event) {
     const rect = foil.getBoundingClientRect();
-    const point = "touches" in event ? event.touches[0] || event.changedTouches[0] : event;
     return {
-      x: point.clientX - rect.left,
-      y: point.clientY - rect.top,
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
     };
   }
 
   function scratchAt(from, to) {
     const ctx = foilCtx;
-    const radius = brush.min + Math.random() * (brush.max - brush.min);
     ctx.globalCompositeOperation = "destination-out";
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.lineWidth = radius * 2;
+    ctx.lineWidth = brush * 2;
     ctx.beginPath();
     ctx.moveTo(from.x, from.y);
     ctx.lineTo(to.x, to.y);
     ctx.stroke();
     ctx.beginPath();
-    ctx.arc(to.x, to.y, radius, 0, Math.PI * 2);
+    ctx.arc(to.x, to.y, brush, 0, Math.PI * 2);
     ctx.fill();
   }
 
   function scratchedRatio() {
     const { width, height } = foil;
+    if (!width || !height) return 0;
     const data = foilCtx.getImageData(0, 0, width, height).data;
     const step = 16;
     let clear = 0;
@@ -141,21 +155,7 @@
         if (data[(y * width + x) * 4 + 3] < 18) clear += 1;
       }
     }
-    return clear / total;
-  }
-
-  function tiltCard(event) {
-    if (revealed || reducedMotion) return;
-    const rect = card.getBoundingClientRect();
-    const point = "touches" in event ? event.touches[0] : event;
-    if (!point) return;
-    const px = (point.clientX - rect.left) / rect.width - 0.5;
-    const py = (point.clientY - rect.top) / rect.height - 0.5;
-    card.style.transform = `rotateY(${px * 8}deg) rotateX(${-py * 8}deg)`;
-  }
-
-  function resetTilt() {
-    card.style.transform = "";
+    return total ? clear / total : 0;
   }
 
   function celebrate() {
@@ -177,9 +177,8 @@
   function reveal() {
     if (revealed) return;
     revealed = true;
-    foilHint.classList.add("is-hidden");
+    if (foilHint) foilHint.classList.add("is-hidden");
     card.classList.add("is-revealed");
-    resetTilt();
 
     const fade = () => {
       foilCtx.save();
@@ -210,10 +209,17 @@
     if (revealed) return;
     event.preventDefault();
     drawing = true;
+    hasScratched = true;
     last = pointerPos(event);
-    foilHint.classList.add("is-hidden");
+    if (foilHint) foilHint.classList.add("is-hidden");
+    if (card.setPointerCapture && event.pointerId != null) {
+      try {
+        card.setPointerCapture(event.pointerId);
+      } catch {
+        /* ignore */
+      }
+    }
     scratchAt(last, last);
-    tiltCard(event);
     if (navigator.vibrate) navigator.vibrate(8);
   }
 
@@ -223,7 +229,6 @@
     const next = pointerPos(event);
     scratchAt(last, next);
     last = next;
-    tiltCard(event);
     if (!progressQueued) {
       progressQueued = true;
       requestAnimationFrame(() => {
@@ -238,7 +243,6 @@
     if (event) event.preventDefault();
     drawing = false;
     last = null;
-    resetTilt();
     if (!revealed && scratchedRatio() >= revealAt) reveal();
   }
 
@@ -299,19 +303,23 @@
     setupFoil();
   }
 
-  foil.addEventListener("pointerdown", start, { passive: false });
-  window.addEventListener("pointermove", move, { passive: false });
-  window.addEventListener("pointerup", end, { passive: false });
-  window.addEventListener("pointercancel", end, { passive: false });
-  foil.addEventListener("touchstart", start, { passive: false });
-  window.addEventListener("touchmove", move, { passive: false });
-  window.addEventListener("touchend", end, { passive: false });
+  card.addEventListener("pointerdown", start, { passive: false });
+  card.addEventListener("pointermove", move, { passive: false });
+  card.addEventListener("pointerup", end, { passive: false });
+  card.addEventListener("pointercancel", end, { passive: false });
   window.addEventListener("resize", onResize);
-
-  onResize();
-  if (document.fonts && document.fonts.ready) {
-    document.fonts.ready.then(() => onResize());
+  if (typeof ResizeObserver === "function") {
+    const observer = new ResizeObserver(() => setupFoil());
+    observer.observe(card);
   }
-  requestAnimationFrame(onResize);
+
+  const startLayout = () => {
+    onResize();
+    requestAnimationFrame(setupFoil);
+  };
+
+  if (document.readyState === "complete") startLayout();
+  else window.addEventListener("load", startLayout, { once: true });
+  startLayout();
   loop();
 })();
